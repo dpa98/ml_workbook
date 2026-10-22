@@ -1,0 +1,66 @@
+import argparse
+import matplotlib
+matplotlib.use('Agg')
+import numpy as np
+import matplotlib.pyplot as plt
+
+from data_loader import load_and_split_iris
+from preprocessing import standardize_data
+from model import train_knn, evaluate_model
+from visualization import plot_decision_regions
+
+def parse_args():
+    """Configura la interfaz de línea de comandos (CLI) para probar hiperparámetros rápidamente."""
+    parser = argparse.ArgumentParser(description="Flujo de trabajo modular para k-vecinos más cercanos (KNN)")
+    parser.add_argument('--k', type=int, default=5,
+                        help='Número de vecinos k. Por defecto es 5.')
+    parser.add_argument('--test_size', type=float, default=0.3,
+                        help='Proporción del conjunto de prueba. Por defecto es 0.3.')
+    return parser.parse_args()
+
+def main():
+    args = parse_args()
+
+    print(f"--- Ejecutando KNN (k={args.k}, test_size={args.test_size}) ---")
+
+    X_train, X_test, y_train, y_test = load_and_split_iris(test_size=args.test_size)
+    X_train_std, X_test_std, scaler = standardize_data(X_train, X_test)
+
+    knn = train_knn(X_train_std, y_train, n_neighbors=args.k)
+
+    misclassified, accuracy = evaluate_model(knn, X_test_std, y_test)
+    print(f'\nResultados:')
+    print(f' -> Ejemplos mal clasificados: {misclassified}')
+    print(f' -> Precisión (Accuracy): {accuracy:.3f}')
+
+    print(f'\nEjemplo de predicción por votación (primeras 3 muestras de prueba):')
+    for i, xi in enumerate(X_test_std[:3]):
+        dist, idx = knn.kneighbors(xi.reshape(1, -1))
+        votes = y_train[idx].ravel()
+        print(f' Muestra {i+1}: predicha={knn.predict([xi])[0]}, vecinos={votes}, distancias={dist.ravel().round(3)}')
+
+    print("\nGenerando visualización...")
+    X_combined_std = np.vstack((X_train_std, X_test_std))
+    y_combined = np.hstack((y_train, y_test))
+
+    # Aplicando una estética visual minimalista clara (fondo crema/blanco oscuro)
+    fig = plt.figure(facecolor='#FDFBF7')
+    ax = fig.add_subplot(111)
+    ax.set_facecolor('#FDFBF7')
+
+    test_idx_start = len(y_train)
+    plot_decision_regions(X=X_combined_std,
+                          y=y_combined,
+                          classifier=knn,
+                          test_idx=range(test_idx_start, len(y_combined)))
+
+    plt.xlabel('Petal length [standardized]')
+    plt.ylabel('Petal width [standardized]')
+    plt.legend(loc='upper left')
+    plt.tight_layout()
+
+    plt.savefig('knn_regions_output.png', facecolor=fig.get_facecolor())
+    print("¡Gráfico guardado como 'knn_regions_output.png'!")
+
+if __name__ == '__main__':
+    main()
